@@ -869,7 +869,7 @@ class Slide1Scene extends BaseState{
         // resetting the object to remove any lasting animations from the previous scene.
         engine.context.mainObject.playAnimation('hover', true);
 
-        /*this._arrowRoot = new BABYLON.TransformNode("ParentNode", engine.context.scene);
+        this._arrowRoot = new BABYLON.TransformNode("ParentNode", engine.context.scene);
 
         const shaft = BABYLON.MeshBuilder.CreateCylinder("shaft", { height: 2, diameter: 0.1 }, engine.context.scene);
         const tip = BABYLON.MeshBuilder.CreateCylinder("tip", { diameterTop: 0, diameterBottom: 0.3, height: 0.5 }, engine.context.scene);
@@ -905,13 +905,13 @@ class Slide1Scene extends BaseState{
         bounce.setKeys(keys);
 
         shaft.animations.push(bounce);
-        engine.context.scene.beginAnimation(shaft, 0, 60, true, 3); */
+        engine.context.scene.beginAnimation(shaft, 0, 60, true, 3); 
 
 
     }
 
     async exit(engine){
-        //this._arrowRoot.dispose();
+        this._arrowRoot.dispose();
 
         engine.context.topMenu.setVisible(false);
         engine.context.topMenu.minimizeCaption();
