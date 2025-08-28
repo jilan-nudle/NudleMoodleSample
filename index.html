@@ -1082,7 +1082,7 @@ class ConcludeScene extends BaseState{
         const endScreen = new DialogScreen("https://i.imgur.com/vQq0L0V.png", "Drone Overview", "And there we have it! Our AR lesson is completed. By the end of this you should know:\n- How a drone works\n- How a drone is assembled\n- How the drone camera works", "RESTART LESSON");
 
         endScreen.attachEvent(() => {
-            engine.goTo("Introduction);
+            engine.goTo("Introduction");
         });
 
         this.endScreenObj = endScreen.get();
