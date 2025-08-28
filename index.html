@@ -1,0 +1,1301 @@
+<!doctype html>
+<html>
+    <head>
+        <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+
+        <title>Babylon.js sample code</title>
+
+        <!-- Babylon.js -->
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/dat-gui/0.6.2/dat.gui.min.js"></script>
+        <script src="https://assets.babylonjs.com/generated/Assets.js"></script>
+        <script src="https://cdn.babylonjs.com/recast.js"></script>
+        <script src="https://cdn.babylonjs.com/ammo.js"></script>
+        <script src="https://cdn.babylonjs.com/havok/HavokPhysics_umd.js"></script>
+        <script src="https://cdn.babylonjs.com/cannon.js"></script>
+        <script src="https://cdn.babylonjs.com/Oimo.js"></script>
+        <script src="https://cdn.babylonjs.com/earcut.min.js"></script>
+        <script src="https://cdn.babylonjs.com/babylon.js"></script>
+        <script src="https://cdn.babylonjs.com/materialsLibrary/babylonjs.materials.min.js"></script>
+        <script src="https://cdn.babylonjs.com/proceduralTexturesLibrary/babylonjs.proceduralTextures.min.js"></script>
+        <script src="https://cdn.babylonjs.com/postProcessesLibrary/babylonjs.postProcess.min.js"></script>
+        <script src="https://cdn.babylonjs.com/loaders/babylonjs.loaders.js"></script>
+        <script src="https://cdn.babylonjs.com/serializers/babylonjs.serializers.min.js"></script>
+        <script src="https://cdn.babylonjs.com/gui/babylon.gui.min.js"></script>
+        <script src="https://cdn.babylonjs.com/addons/babylonjs.addons.min.js"></script>
+        <script src="https://cdn.babylonjs.com/inspector/babylon.inspector.bundle.js"></script>
+
+        <style>
+            html,
+            body {
+                overflow: hidden;
+                width: 100%;
+                height: 100%;
+                margin: 0;
+                padding: 0;
+            }
+
+            #renderCanvas {
+                width: 100%;
+                height: 100%;
+                touch-action: none;
+            }
+
+            #canvasZone {
+                width: 100%;
+                height: 100%;
+            }
+        </style>
+    </head>
+    <body>
+        <div id="canvasZone"><canvas id="renderCanvas"></canvas></div>
+        <script>
+                    var canvas = document.getElementById("renderCanvas");
+
+                    var startRenderLoop = function (engine, canvas) {
+                        engine.runRenderLoop(function () {
+                            if (sceneToRender && sceneToRender.activeCamera) {
+                                sceneToRender.render();
+                            }
+                        });
+                    }
+
+                    var engine = null;
+        var scene = null;
+        var sceneToRender = null;
+        var createDefaultEngine = function() { return new BABYLON.Engine(canvas, true, { preserveDrawingBuffer: true, stencil: true,  disableWebGL2Support: false}); };
+        /*
+
+xr.baseExperience.onStateChangedObservable.add(state => {
+    if (state === BABYLON.WebXRState.IN_XR) {
+        // Runs ONLY when AR starts
+    } else if (state === BABYLON.WebXRState.NOT_IN_XR) {
+        // Runs ONLY when AR stops
+    }
+});
+
+*/
+
+
+const getStylizedButton = (image, SCALE=1) => {
+    const button = BABYLON.GUI.Button.CreateImageOnlyButton("stylized_button", image);
+    button.height = (35 * SCALE) + "px";
+    button.width = (35 * SCALE) + "px";;
+    button.background = "rgb(26,27,25)";
+    button.cornerRadius = 15 * SCALE;
+    button.thickness = 0;
+    button.alpha = 0.6
+
+    button.image.height = (20 * SCALE) + "px";
+    button.image.width = (20 * SCALE) + "px";
+    button.image.horizontalAlignment = BABYLON.GUI.Control.HORIZONTAL_ALIGNMENT_CENTER;
+    button.image.verticalAlignment   = BABYLON.GUI.Control.VERTICAL_ALIGNMENT_CENTER;
+
+    return button;
+}
+
+
+class SceneObject{
+    constructor(link, scene){
+        this.link = link
+        this.scene = scene;
+        this.object = null;
+    }
+
+    async loadObject(){
+        this.object = await BABYLON.ImportMeshAsync(this.link, this.scene);
+    }
+
+    getObject(){
+        return this.object;
+    }
+
+    getRoot(){
+        return this.object.meshes[0];
+    }
+
+    setVisible(isVisible){
+        if(isVisible){
+            this.getRoot().setEnabled(true);
+        }else{
+            this.getRoot().setEnabled(false);
+        }
+    }
+    setScaling(scale){
+        this.getRoot().scaling = new BABYLON.Vector3(scale, scale, scale);
+    }
+
+    setParent(parent){
+        this.getRoot().parent = parent;
+    }
+
+    stopAllAnimation(){
+        if (!this.object) return;
+
+        this.object.animationGroups.forEach(group => {
+            group.stop();
+        });
+    }
+
+    playAnimation(animation, loop = false, speed = 1){
+        this.stopAllAnimation();
+        const anim = this.object.animationGroups.find(a => a.name === animation);
+        anim.start(loop);
+        anim.speedRatio = speed;
+
+    }
+
+    highlightMesh(meshName){
+        const excluded = meshName;
+
+        this.object.meshes.forEach(mesh => {
+        if (mesh.name !== excluded) {
+            if (mesh.material) {
+                if (!mesh.material.isUnique) {
+                    mesh.material = mesh.material.clone(mesh.name + "_mat");
+                }
+                mesh.material.alpha = 0.3;
+            }
+        }
+        });
+    }
+
+    resetHighlight(){
+
+        this.object.meshes.forEach(mesh => {
+            if (mesh.material) {
+                if (!mesh.material.isUnique) {
+                    mesh.material = mesh.material.clone(mesh.name + "_mat");
+                }
+                mesh.material.alpha = 1;
+            }
+        })
+
+    }
+
+    findMesh(meshName){
+        const targetMesh = this.object.meshes.find(m => m.name === meshName);
+        return targetMesh
+    }
+
+    attachLabel(meshName, advancedTexture, text){
+        const mesh = this.findMesh(meshName);
+
+        const rect = new BABYLON.GUI.Rectangle("caption");
+        rect.background = "rgb(40,40,40)";   // Dark gray background
+        rect.color = "white";                // Outline color
+        rect.thickness = 2;                  // Outline thickness
+        rect.height = "40px";
+        rect.width = "200px";                // Wide enough for long text
+        rect.cornerRadius = 8;               // Rounded edges
+        rect.alpha = 0.9;                    // Slight transparency
+
+        // Add text inside rectangle
+        const label = new BABYLON.GUI.TextBlock();
+        label.text = text;
+        label.color = "white";
+        label.fontSize = 14;
+        label.fontFamily = "Aptos, Calibri"; // If Canva Sans not available, fallback to sans-serif
+        label.textHorizontalAlignment = BABYLON.GUI.Control.HORIZONTAL_ALIGNMENT_CENTER;
+        label.textVerticalAlignment = BABYLON.GUI.Control.VERTICAL_ALIGNMENT_CENTER;
+
+        // Add text to rectangle
+        rect.addControl(label);
+
+        // Add rectangle to UI
+        advancedTexture.addControl(rect);
+
+        rect.linkWithMesh(mesh);
+
+        rect.linkOffsetY = 0;
+
+        return rect;
+
+    }
+
+}
+
+
+class TopMenu{
+    constructor(advancedTexture, SCALE=1){
+        this.scale = SCALE;
+
+        this.rootLayout = new BABYLON.GUI.StackPanel();
+        this.rootLayout.isVertical = true;
+        this.rootLayout.height = "100%";
+        this.rootLayout.width = (500 * this.scale) + "px";
+        this.rootLayout.spacing = 10 * this.scale;
+        this.rootLayout.paddingLeft = "20px";
+        this.rootLayout.paddingTop = (20 * this.scale) + "px";
+
+        this.additionalOptions = [];
+
+        this.caption = "";
+        this.captionTextBlock = new BABYLON.GUI.TextBlock();
+        this.captionTextBlock.fontFamily = "Aptos, Calibri";
+
+        // Positining root layout
+        this.rootLayout.verticalAlignment = BABYLON.GUI.Control.VERTICAL_ALIGNMENT_TOP;
+        this.rootLayout.horizontalAlignment = BABYLON.GUI.Control.HORIZONTAL_ALIGNMENT_LEFT;
+
+        this.exitButton = getStylizedButton("https://i.imgur.com/EBbcSLQ.png");
+        this.exitButton.horizontalAlignment    = BABYLON.GUI.Control.HORIZONTAL_ALIGNMENT_LEFT;
+        this.rootLayout.addControl(this.exitButton);
+        
+        this.spacer = new BABYLON.GUI.Rectangle();
+        this.spacer.height = (100 * this.scale) + "px";
+        this.spacer.width = "2px";
+        this.spacer.thickness = 0;
+        this.spacer.background = "transparent";
+        this.rootLayout.addControl(this.spacer);
+
+        this.captionButton = getStylizedButton("https://i.imgur.com/78r87oh.png", this.scale);
+        this.captionButton.top = "10px";
+        this.captionButton.horizontalAlignment = BABYLON.GUI.Control.HORIZONTAL_ALIGNMENT_LEFT;
+        this.rootLayout.addControl(this.captionButton);
+
+        this.captionButtonMax = getStylizedButton("https://i.imgur.com/78r87oh.png", this.scale);
+        this.captionButtonMax.top = "10px";
+        this.captionButtonMax.horizontalAlignment = BABYLON.GUI.Control.HORIZONTAL_ALIGNMENT_LEFT;
+        this.rootLayout.addControl(this.captionButtonMax);
+
+        this.captionButtonMax.height = (180* this.scale) + "px";
+        this.captionButtonMax.width = (250 * this.scale) + "px";
+
+        this.captionTextBlock.isVisible = true;
+        this.captionTextBlock.text = this.caption;
+        this.captionTextBlock.color = "white";
+        this.captionTextBlock.fontSize = 12 * this.scale;
+        this.captionTextBlock.textHorizontalAlignment = BABYLON.GUI.Control.HORIZONTAL_ALIGNMENT_LEFT;
+        this.captionTextBlock.textVerticalAlignment = BABYLON.GUI.Control.VERTICAL_ALIGNMENT_TOP;
+        this.captionTextBlock.setPadding((10 * this.scale) + "px");
+        this.captionTextBlock.paddingLeft = (35 * this.scale) + "px";
+        this.captionTextBlock.textWrapping = true;
+        this.captionButtonMax.image.horizontalAlignment = BABYLON.GUI.Control.HORIZONTAL_ALIGNMENT_LEFT;
+        this.captionButtonMax.image.left = (7 * this.scale) + "px";
+        this.captionButtonMax.addControl(this.captionTextBlock);
+        this.captionButtonMax.isVisible = false;
+
+        
+        // end
+
+        this.aiButton = getStylizedButton("https://i.imgur.com/esgvxb2.png", this.scale);
+        this.aiButton.horizontalAlignment      = BABYLON.GUI.Control.HORIZONTAL_ALIGNMENT_LEFT;
+        this.rootLayout.addControl(this.aiButton);
+
+        this.arButton = getStylizedButton("https://i.imgur.com/ugjxybx.png", this.scale);
+        this.arButton.horizontalAlignment      = BABYLON.GUI.Control.HORIZONTAL_ALIGNMENT_LEFT;
+        this.rootLayout.addControl(this.arButton);
+
+        this.moreButton = getStylizedButton("https://i.imgur.com/6Tlxd4e.png", this.scale);
+        this.moreButton.horizontalAlignment = BABYLON.GUI.Control.HORIZONTAL_ALIGNMENT_LEFT;
+        this.rootLayout.addControl(this.moreButton);
+
+        // Additional buttons
+        this.explodeButton = getStylizedButton("https://i.imgur.com/GhjRsVM.png", this.scale);
+        this.explodeButton.horizontalAlignment = BABYLON.GUI.Control.HORIZONTAL_ALIGNMENT_LEFT;
+        this.rootLayout.addControl(this.explodeButton);
+        this.additionalOptions.push(this.explodeButton);
+
+        this.animateButton = getStylizedButton("https://i.imgur.com/FZ9gxQb.png", this.scale);
+        this.animateButton.horizontalAlignment = BABYLON.GUI.Control.HORIZONTAL_ALIGNMENT_LEFT;
+        this.rootLayout.addControl(this.animateButton);
+        this.additionalOptions.push(this.animateButton);
+
+        
+        // Navigation buttons
+        this.prevButton = getStylizedButton("https://i.imgur.com/kZYL57d.png");
+        this.nextButton = getStylizedButton("https://i.imgur.com/Cg6HEBC.png");
+
+        // adding the buttons
+        this.navBtnLayout = new BABYLON.GUI.StackPanel();
+        this.navBtnLayout.isVertical = false;
+        this.navBtnLayout.width = "100%";
+        this.navBtnLayout.height = (100 * this.scale) + "px";
+        this.navBtnLayout.spacing = 15 * this.scale;
+
+        
+        this.prevButton.horizontalAlignment = BABYLON.GUI.Control.HORIZONTAL_ALIGNMENT_LEFT;
+        this.navBtnLayout.addControl(this.prevButton);
+
+        
+        this.nextButton.horizontalAlignment = BABYLON.GUI.Control.HORIZONTAL_ALIGNMENT_LEFT;
+        this.navBtnLayout.addControl(this.nextButton);
+
+        this.rootLayout.addControl(this.navBtnLayout);
+
+
+        // Adding toggle events on captionButton.
+        this.captionButton.onPointerUpObservable.add(() => {
+            this.maximizeCaption();
+        });
+
+        this.captionButtonMax.onPointerUpObservable.add(() => {
+            this.minimizeCaption();
+        });
+
+        this.additionalOptions.forEach((button) => {
+            button.isVisible = false;
+        });
+
+        this.moreButton.onPointerUpObservable.add(() => {
+            this.additionalOptions.forEach((button) => {
+                button.isVisible = !(button.isVisible);
+            });
+        });
+
+
+
+        advancedTexture.addControl(this.rootLayout);
+
+    }
+
+    disableAdditionalButtons(disable){
+        this.additionalOptions.forEach((button) => {
+            button.isEnabled = !disable;
+        });
+    }
+
+    setVisible(isVisible){
+        if(isVisible){
+            this.rootLayout.isVisible = true;    
+        }else{
+            this.rootLayout.isVisible = false;
+        }
+
+    }
+
+    setCaption(caption){
+        // removing exisiting component
+        this.captionButtonMax.removeControl(this.captionTextBlock);
+
+        this.captionTextBlock = new BABYLON.GUI.TextBlock();
+        this.captionTextBlock.fontFamily = "Aptos, Calibri";
+
+        this.caption = caption;
+        this.captionTextBlock.text = this.caption;
+        
+        this.captionTextBlock.isVisible = true;
+        this.captionTextBlock.text = this.caption;
+        this.captionTextBlock.color = "white";
+        this.captionTextBlock.fontSize = 12 * this.scale;
+        this.captionTextBlock.textHorizontalAlignment = BABYLON.GUI.Control.HORIZONTAL_ALIGNMENT_LEFT;
+        this.captionTextBlock.textVerticalAlignment = BABYLON.GUI.Control.VERTICAL_ALIGNMENT_CENTER;
+        this.captionTextBlock.setPadding((10 * this.scale) + "px");
+        this.captionTextBlock.paddingLeft = (35 * this.scale) + "px";
+        this.captionTextBlock.textWrapping = true;
+
+        this.captionButtonMax.addControl(this.captionTextBlock);
+
+    }
+
+    maximizeCaption(){
+        this.captionButtonMax.isVisible = true;
+        this.captionButton.isVisible = false;
+
+    }
+
+    minimizeCaption(){
+        this.captionButtonMax.isVisible = false;
+        this.captionButton.isVisible = true;
+
+    }
+
+    setScale(newScale) {
+        this.scale = newScale;
+
+        // Update root layout
+        this.rootLayout.width = (500 * this.scale) + "px";
+        this.rootLayout.spacing = 10 * this.scale;
+
+        // Rescale all buttons
+        [   this.exitButton,
+            this.captionButton,
+            this.aiButton,
+            this.arButton,
+            this.moreButton,
+            this.explodeButton,
+            this.animateButton,
+            this.captionButtonMax,
+            this.prevButton,
+            this.nextButton,
+        ].forEach(btn => {
+            btn.width = (35 * this.scale) + "px";
+            btn.height = (35 * this.scale) + "px";
+            btn.cornerRadius = 15 * this.scale;
+
+            if (btn.image) {
+                btn.image.width = (20 * this.scale) + "px";
+                btn.image.height = (20 * this.scale) + "px";
+            }
+        });
+
+        this.spacer.height = (100 * this.scale) + "px";
+        //this.rootLayout.paddingTop = (20 * this.scale) + "px";
+
+        this.captionTextBlock.fontSize = 12 * this.scale;
+        this.captionTextBlock.setPadding((10 * this.scale) + "px");
+        this.captionTextBlock.paddingLeft = (35 * this.scale) + "px";
+        this.captionButtonMax.image.left = (7 * this.scale) + "px";
+        this.captionButtonMax.height = (180* this.scale) + "px";
+        this.captionButtonMax.width = (250 * this.scale) + "px";
+
+        this.navBtnLayout.height = (100 * this.scale) + "px";
+        this.navBtnLayout.spacing = 15 * this.scale;
+    }
+
+
+}
+
+
+class DialogScreen{
+    constructor(imageLink, titleText, captionText, buttonText){
+        this.rootLayout = new BABYLON.GUI.StackPanel();
+        this.rootLayout.height = "500px"
+        this.rootLayout.width = "300px"
+
+
+        //const panel = new GradientRectangle();
+        const panel = new BABYLON.GUI.Rectangle();
+        panel.width = "300px";
+        panel.height = "350px";
+        panel.thickness = 0;
+        panel.cornerRadius = "10";
+        panel.background = "rgb(26,27,25)";
+
+        this.rootLayout.addControl(panel);
+
+        const layout = new BABYLON.GUI.StackPanel();
+        layout.isVertical = true;
+        layout.width = "100%";
+        layout.height = "100%";
+        layout.setPadding("15px");
+        panel.addControl(layout);
+
+        const image = new BABYLON.GUI.Image("img", imageLink);
+        image.height="110px";
+        image.width = "130px"
+        layout.addControl(image);
+
+        const title = new BABYLON.GUI.TextBlock();
+        title.text = titleText;
+        title.color = "white";
+        title.fontSize = 17;
+        title.fontFamily = "Aptos, Calibri";
+        title.fontWeight = "bold";
+        title.height="20px";
+        layout.addControl(title);
+
+        const caption = new BABYLON.GUI.TextBlock();
+        caption.text = captionText;
+        caption.fontSize = 13;
+        caption.color = "white";
+        caption.textHorizontalAlignment = "left";
+        caption.fontFamily = "Aptos, Calibri";
+        caption.textWrapping = true;
+        caption.height = "200px";
+        layout.addControl(caption);
+
+        this.button = BABYLON.GUI.Button.CreateSimpleButton("Button", buttonText);
+        this.button.height = "50px";
+        this.button.width = 1;
+        this.button.color = 'white';
+        this.button.thickness = 0;
+        this.button.fontSize = 13;
+        this.button.background = '#5170ff';
+        this.button.cornerRadius = "8";
+        this.button.fontWeight = "bold";
+        
+        // Adding gap between panel and button
+        const buttonContainer = new BABYLON.GUI.Rectangle();
+        buttonContainer.height = "60px";
+        buttonContainer.addControl(this.button);
+        buttonContainer.paddingTop = "10px";
+        buttonContainer.thickness = 0;
+        
+        this.rootLayout.addControl(buttonContainer);
+    }
+
+    get(){
+        return this.rootLayout;
+    }
+
+    attachEvent(func){
+        this.button.onPointerUpObservable.add(func);
+    }
+
+    setScale(scale){
+        this.rootLayout.scaleX = scale;
+        this.rootLayout.scaleY = scale;
+    }
+    
+}
+
+class XRChangeManager{
+    constructor(xr){
+        this.xr = xr;
+    }
+ 
+    inAR(){}
+ 
+    in3D(){}
+
+    onExitAR(){}
+
+    onExit3D(){}
+
+    processCheck(){
+        if(this.xr.baseExperience.state === BABYLON.WebXRState.IN_XR){
+            this.onExit3D();
+            this.inAR();
+        }else if(this.xr.baseExperience.state === BABYLON.WebXRState.NOT_IN_XR){
+            this.onExitAR();
+            this.in3D();
+        }
+    }
+}
+
+
+class BlobShadow {
+    constructor(scene, options = {}) {
+        this.scene = scene;
+
+        // Default options (can be overridden)
+        this.options = Object.assign({
+            radius: 1,
+            opacity: 0.3,
+            resolution: 512,
+            darkRadius: 15,   // solid inner radius
+            fadeRadius: 30,  // soft fade out
+            offsetY: 0.01     // lift off ground to avoid z-fighting
+        }, options);
+
+        // Create disc
+        this.disc = BABYLON.MeshBuilder.CreateDisc("blobShadow", {
+            radius: this.options.radius,
+            tessellation: 48
+        }, this.scene);
+        this.disc.rotation.x = Math.PI / 2;
+        this.disc.position.y = this.options.offsetY;
+        this.disc.isPickable = false;
+
+        // Create material with radial gradient
+        const shadowMat = new BABYLON.StandardMaterial("shadowMat", this.scene);
+        const dynTex = new BABYLON.DynamicTexture(
+            "shadowTex",
+            { width: this.options.resolution, height: this.options.resolution },
+            this.scene,
+            true
+        );
+        const ctx = dynTex.getContext();
+
+        // Radial gradient
+        const grd = ctx.createRadialGradient(
+            this.options.resolution / 2, this.options.resolution / 2, this.options.darkRadius,
+            this.options.resolution / 2, this.options.resolution / 2, this.options.fadeRadius
+        );
+        grd.addColorStop(0, `rgba(0,0,0,${this.options.opacity})`);
+        grd.addColorStop(1, "rgba(0,0,0,0)");
+
+        ctx.fillStyle = grd;
+        ctx.fillRect(0, 0, this.options.resolution, this.options.resolution);
+        dynTex.update();
+
+        shadowMat.diffuseTexture = dynTex;
+        shadowMat.opacityTexture = dynTex;
+        shadowMat.specularColor = BABYLON.Color3.Black();
+
+        this.disc.material = shadowMat;
+    }
+
+    /** Attach shadow under a mesh/transform node */
+    attachTo(mesh) {
+        this.disc.parent = mesh;
+        this.disc.position.y = this.options.offsetY;
+    }
+
+    /** Manually set position */
+    setPosition(x, y, z) {
+        this.disc.position.set(x, y + this.options.offsetY, z);
+    }
+
+    /** Scale shadow */
+    setScale(scale) {
+        this.disc.scaling.set(scale, scale, scale);
+    }
+
+    /** Hide/Show */
+    setVisible(visible) {
+        this.disc.isVisible = visible;
+    }
+}
+
+// FLOW ENGINE 
+
+class Emitter {
+  constructor() { this.listeners = new Map(); }
+  on(name, fn) {
+    if (!this.listeners.has(name)) this.listeners.set(name, new Set());
+    this.listeners.get(name).add(fn);
+    return () => this.off(name, fn); // unsubscribe helper
+  }
+  off(name, fn) { this.listeners.get(name)?.delete(fn); }
+  emit(name, payload) { this.listeners.get(name)?.forEach(fn => fn(payload)); }
+}
+
+// -------------------------------------------------
+// 3) BaseState: extend this to create your own states
+// -------------------------------------------------
+class BaseState {
+  /** @param {string} name - unique state name */
+  constructor(name) { this.name = name; }
+
+  /** Called when the engine ENTERS this state */
+  async enter(engine, payload) {
+    // Override in subclasses. Do lightweight setup here.
+    // Example: prefill forms from engine.context, start timers, fetch data, etc.
+  }
+
+  /** Called when the engine EXITS this state */
+  async exit(engine, payload) {
+    // Override in subclasses. Cleanup timers, detach listeners, save draft, etc.
+  }
+
+  /** Handle events dispatched while this state is active */
+  async onEvent(engine, event, payload) {
+    // Override in subclasses. Decide transitions based on event+payload.
+    // You can read/write shared data via engine.context.
+    // Example default: ignore unknown events.
+  }
+}
+
+// ---------------------------------------------
+// 4) FlowEngine: manages current state + context
+// ---------------------------------------------
+class FlowEngine extends Emitter {
+  /**
+   * @param {Object} options
+   * @param {BaseState[]} options.states - list of state instances
+   * @param {string} options.initial - name of the initial state
+   * @param {Object} [options.context] - shared data bag for all states
+   */
+  constructor({ states, initial, context = {} }) {
+    super();
+    // Build a map: name -> state
+    this.states = new Map(states.map(s => [s.name, s]));
+    if (!this.states.has(initial)) {
+      throw new Error(`Initial state "${initial}" not found.`);
+    }
+    this.initial = initial;
+    this.current = null; // will hold the active state instance
+    this.context = context; // shared bag for any state data
+    this._transitioning = false; // guard to prevent reentrant transitions
+  }
+
+  /** Start the flow, moving to the initial state */
+  async start(payload) {
+    return this.goTo(this.initial, payload);
+  }
+
+  /** Force a transition to a target state by name */
+  async goTo(targetStateName, payload) {
+    if (!this.states.has(targetStateName)) {
+      this.emit('error', { message: `State "${targetStateName}" does not exist.` });
+      throw new Error(`State "${targetStateName}" does not exist.`);
+    }
+    if (this._transitioning) return; // prevent overlap
+    this._transitioning = true;
+
+    const prev = this.current;
+    try {
+      if (prev) {
+        await prev.exit(this, payload);
+      }
+      this.current = this.states.get(targetStateName);
+      this.emit('transition', { from: prev?.name ?? null, to: this.current.name, payload });
+      await this.current.enter(this, payload);
+    } catch (err) {
+      this.emit('error', { error: err, at: 'goTo', from: prev?.name ?? null, to: targetStateName });
+      throw err;
+    } finally {
+      this._transitioning = false;
+    }
+  }
+
+  /** Dispatch an event to the active state */
+  async dispatch(event, payload) {
+    if (!this.current) {
+      this.emit('error', { message: 'No active state. Did you call engine.start()?' });
+      throw new Error('No active state. Did you call engine.start()?');
+    }
+    this.emit('event', { state: this.current.name, event, payload });
+    try {
+      await this.current.onEvent(this, event, payload);
+    } catch (err) {
+      this.emit('error', { error: err, at: 'dispatch', state: this.current.name, event });
+      throw err;
+    }
+  }
+
+  /** Reset flow back to the initial state (optionally wiping context) */
+  async reset({ wipeContext = false } = {}) {
+    if (wipeContext) this.context = {};
+    await this.goTo(this.initial);
+  }
+}
+
+// States
+class IntroScene extends BaseState{
+    constructor(){
+        super('Introduction');
+        this.rootLayout = null;
+    }
+    
+    async enter(engine){
+        
+        const introScreen = new DialogScreen("https://i.imgur.com/vQq0L0V.png", "Drone Overview", "You’re about to begin an immersive lesson on drones, where you’ll explore and interact with a 3D model in real time. This experience will guide you through the basic components of the drone and how they work together—so get ready to dive in, explore, and learn well!", "START LESSON");
+
+        introScreen.attachEvent(() => {
+            engine.goTo("Overview");
+        });
+
+        this.introScreenObj = introScreen.get();
+
+        engine.context.advancedTexture.addControl(this.introScreenObj);
+
+        const xrManager = new XRChangeManager(engine.context.xr);
+        xrManager.inAR = () =>{
+            introScreen.setScale(3);
+        }
+        xrManager.onExitAR = () => {
+            introScreen.setScale(1);
+        }
+
+        xrManager.processCheck();
+
+
+    }
+
+    async exit(){
+        this.introScreenObj.dispose();
+    }
+}
+
+class OverviewScene extends BaseState{
+    constructor(){
+        super('Overview');
+    }
+
+    async enter(engine, payload){
+
+        engine.context.topMenu.setVisible(true);
+        engine.context.topMenu.setCaption("A drone is a lightweight aerial device designed to fly. Please explore the model in the overview.");
+        engine.context.topMenu.disableAdditionalButtons(false);
+
+        engine.context.topMenu.maximizeCaption();
+
+        const xrManager = new XRChangeManager(engine.context.xr);
+        
+        xrManager.inAR = () => {
+            engine.context.isARPlaced = true;
+            
+            engine.context.topMenu.setScale(3);
+
+            const object = engine.context.mainObject;
+            
+            engine.context.dot.isVisible = false;
+
+            object.getRoot().parent = engine.context.root;
+            object.setVisible(true);
+            object.getRoot().position.set(0,0,0);
+            object.setScaling(1);
+
+            // changing topmenu icon
+            engine.context.topMenu.arButton.image.source = "https://i.imgur.com/fUOPUfW.png";
+
+        }
+
+        xrManager.in3D = () => {
+            engine.context.skybox.isVisible = true;
+
+            // Scaling UI
+            engine.context.topMenu.setScale(1);
+
+
+            engine.context.root.position = new BABYLON.Vector3(0,2.5,0);
+            const object = engine.context.mainObject;
+            object.refresh();
+            object.getRoot().position.y = -3;
+            object.setVisible(true);
+            object.setScaling(14);
+
+            // changing topmenu icon
+            engine.context.topMenu.arButton.image.source = "https://i.imgur.com/ugjxybx.png";
+
+        }
+
+        xrManager.onExitAR = () => {
+            engine.context.isARPlaced = false;
+        }
+
+
+        xrManager.processCheck();
+
+
+    }
+
+    async exit(engine){
+        engine.context.topMenu.setVisible(false);
+        engine.context.topMenu.minimizeCaption();
+        engine.context.mainObject.setVisible(false);
+
+        // Disabling the additonal options.
+        engine.context.topMenu.disableAdditionalButtons(true);
+        engine.context.mainObject.refresh();
+    }
+}
+
+class Slide1Scene extends BaseState{
+    constructor(){
+        super("Slide1");
+    }
+
+    async enter(engine){
+        engine.context.topMenu.setVisible(true);
+        engine.context.topMenu.setCaption("The propellers of a drone spin rapidly, pushing air downwards and generating an upward force called lift, which allows the drone to rise and fly, while adjusting their speeds controls its balance and direction.");
+        engine.context.topMenu.maximizeCaption();
+
+        engine.context.mainObject.setVisible(true);
+
+        // resetting the object to remove any lasting animations from the previous scene.
+        engine.context.mainObject.playAnimation('hover', true);
+
+        /*this._arrowRoot = new BABYLON.TransformNode("ParentNode", engine.context.scene);
+
+        const shaft = BABYLON.MeshBuilder.CreateCylinder("shaft", { height: 2, diameter: 0.1 }, engine.context.scene);
+        const tip = BABYLON.MeshBuilder.CreateCylinder("tip", { diameterTop: 0, diameterBottom: 0.3, height: 0.5 }, engine.context.scene);
+        tip.position.y = 1.25; // move it to the top of the shaft
+        tip.parent = shaft;
+        
+        shaft.parent = this._arrowRoot;
+        this._arrowRoot.parent = engine.context.root;
+        
+        shaft.position.x = 2;
+        this._arrowRoot.position.y = -2;
+
+        // setting material for arrow
+        const arrowMat = new BABYLON.StandardMaterial("arrowMat", engine.context.scene);
+        arrowMat.diffuseColor = new BABYLON.Color3(0.5, 0.8, 1); // light blue (RGB ~128,204,255)
+
+        shaft.material = arrowMat;
+        tip.material = arrowMat;
+
+        const bounce = new BABYLON.Animation(
+            "bounce",
+            "position.y",
+            30,                             // FPS
+            BABYLON.Animation.ANIMATIONTYPE_FLOAT,
+            BABYLON.Animation.ANIMATIONLOOPMODE_CYCLE
+        );
+
+        const keys = [
+            { frame: 0,   value: 0 },
+            { frame: 30,  value: 0.5 },
+            { frame: 60,  value: 0 }
+        ];
+        bounce.setKeys(keys);
+
+        shaft.animations.push(bounce);
+        engine.context.scene.beginAnimation(shaft, 0, 60, true, 3); */
+
+
+    }
+
+    async exit(engine){
+        //this._arrowRoot.dispose();
+
+        engine.context.topMenu.setVisible(false);
+        engine.context.topMenu.minimizeCaption();
+        engine.context.mainObject.setVisible(false);
+
+        // Disabling the additonal options.
+        engine.context.topMenu.disableAdditionalButtons(true);
+        engine.context.mainObject.refresh();
+                
+    }
+    
+}
+
+class Slide2Scene extends BaseState{
+    constructor(){
+        super("Slide2");
+    }
+
+    async enter(engine){
+        engine.context.topMenu.setVisible(true);
+        engine.context.topMenu.setCaption("A drone’s camera captures images and videos from the air by stabilizing itself with a gimbal to reduce shakes and vibrations. It transmits the live feed to the controller or mobile device, giving you a smooth, real-time view from above.");
+        engine.context.topMenu.maximizeCaption();
+
+        engine.context.mainObject.setVisible(true);
+
+        engine.context.mainObject.highlightMesh("Object_183");
+
+        this._label = engine.context.mainObject.attachLabel("Object_183", engine.context.advancedTexture, "Camera");
+        engine.context.mainObject.playAnimation("hover");
+
+    }
+
+    async exit(engine){
+        engine.context.topMenu.setVisible(false);
+        engine.context.topMenu.minimizeCaption();
+        engine.context.mainObject.setVisible(false);
+
+        // Disabling the additonal options.
+        engine.context.topMenu.disableAdditionalButtons(true);
+        engine.context.mainObject.refresh();
+        engine.context.mainObject.resetHighlight();
+        this._label.dispose();
+    }
+}
+
+class Slide3Scene extends BaseState{
+    constructor(){
+        super('Slide3');
+    }
+
+    async enter(engine){
+        engine.context.shadow.setVisible(false);
+
+        engine.context.topMenu.setVisible(true);
+        engine.context.topMenu.setCaption("Assembling a drone involves carefully connecting its main components—frame, motors, propellers, battery, and camera—into a working system. Each part must be aligned and secured properly so the drone can fly stably and respond accurately to controls.");
+        engine.context.topMenu.maximizeCaption();
+
+        engine.context.mainObject.setVisible(true);
+
+        engine.context.mainObject.playAnimation("step_by_step");
+
+
+
+    }
+
+    async exit(engine){
+        engine.context.topMenu.setVisible(false);
+        engine.context.topMenu.minimizeCaption();
+        engine.context.mainObject.setVisible(false);
+
+        // Disabling the additonal options.
+        engine.context.topMenu.disableAdditionalButtons(true);
+        engine.context.mainObject.refresh();
+
+        engine.context.shadow.setVisible(true);
+    }
+
+}
+
+class Slide4Scene extends BaseState{
+    constructor(){
+        super('Slide4');
+    }
+
+    async enter(engine){
+        engine.context.shadow.setVisible(false);
+        engine.context.mainObject.playAnimation("hover", true);
+
+        engine.context.topMenu.setVisible(true);
+        engine.context.topMenu.setCaption("The flight controller (FC) is the drone’s brain, fusing IMU/GPS data to keep it stable and execute inputs. The electronic speed controller (ESC) is the muscle, translating those commands into rapid, precise motor drive—often via a lightweight 4-in-1 board.");
+        engine.context.topMenu.maximizeCaption();
+
+        engine.context.mainObject.setVisible(true);
+
+        engine.context.mainObject.findMesh("Object_165").isVisible = false;
+        engine.context.mainObject.findMesh("Object_96").isVisible = false;
+        engine.context.mainObject.findMesh("Object_105").isVisible = false;
+        engine.context.mainObject.findMesh("Object_105").isVisible = false;
+        engine.context.mainObject.findMesh("Object_102").isVisible = false;
+        
+        engine.context.mainObject.highlightMesh("Object_126");
+        this._label = engine.context.mainObject.attachLabel("Object_126", engine.context.advancedTexture, "FPC");
+
+
+    }
+
+    async exit(engine){
+        engine.context.topMenu.setVisible(false);
+        engine.context.topMenu.minimizeCaption();
+        engine.context.mainObject.setVisible(false);
+
+        // Disabling the additonal options.
+        engine.context.topMenu.disableAdditionalButtons(true);
+        engine.context.mainObject.refresh();
+
+        engine.context.shadow.setVisible(true);
+
+        engine.context.mainObject.findMesh("Object_165").isVisible = true;
+        engine.context.mainObject.findMesh("Object_96").isVisible = true;
+        engine.context.mainObject.findMesh("Object_105").isVisible = true;
+        engine.context.mainObject.findMesh("Object_105").isVisible = true;
+        engine.context.mainObject.findMesh("Object_102").isVisible = true;
+        engine.context.mainObject.resetHighlight();
+        this._label.isVisible = false;
+
+    }
+
+}
+
+
+class ArIntroScene extends BaseState{
+    constructor(){
+        super('ArIntroduction')
+    }
+
+    async enter(engine){
+        engine.context.skybox.isVisible = false;
+
+        engine.context.dot.isVisible = true;
+        engine.context.hitTest.onHitTestResultObservable.add((results) => {
+            if(engine.context.isARPlaced == false){
+                if (results.length) {
+                    engine.context.dot.isVisible = true;
+                    results[0].transformationMatrix.decompose(engine.context.dot.scaling, engine.context.dot.rotationQuaternion, engine.context.dot.position);
+                    results[0].transformationMatrix.decompose(undefined, engine.context.root.rotationQuaternion, engine.context.root.position);
+                } else {
+                    engine.context.dot.isVisible = false;
+                }
+            }
+        });
+
+    }
+
+    async exit(engine){
+
+    }
+
+}
+
+
+class ConcludeScene extends BaseState{
+    constructor(){
+        super('Conclusion');
+        this.rootLayout = null;
+    }
+    
+    async enter(engine){
+        const endScreen = new DialogScreen("https://i.imgur.com/vQq0L0V.png", "Drone Overview", "And there we have it! Our AR lesson is completed. By the end of this you should know:\n- How a drone works\n- How a drone is assembled\n- How the drone camera works", "END LESSON");
+
+        endScreen.attachEvent(() => {
+            window.location.href = "https://jilan-nudle.github.io/NudleDroneARIntroPage/endingscreen";
+        });
+
+        this.endScreenObj = endScreen.get();
+
+        engine.context.advancedTexture.addControl(this.endScreenObj);
+
+        const xrManager = new XRChangeManager(engine.context.xr);
+        xrManager.inAR = () =>{
+            endScreen.setScale(3);
+        }
+        xrManager.onExitAR = () => {
+            endScreen.setScale(1);
+        }
+
+        xrManager.processCheck();
+
+    }
+
+    async exit(){
+        this.endScreenObj.dispose();
+    }
+}
+
+
+
+var createScene = async function () {
+    var scene = new BABYLON.Scene(engine);
+    scene.clearColor = new BABYLON.Color3(1, 1, 1);
+
+    //var hdrTexture = new BABYLON.CubeTexture("/textures/SpecularHDR.dds", scene);
+    //scene.createDefaultSkybox(hdrTexture, true, 10000);
+
+    var skybox = BABYLON.MeshBuilder.CreateBox("skyBox", {size:1000.0}, scene);
+	var skyboxMaterial = new BABYLON.StandardMaterial("skyBox", scene);
+	skyboxMaterial.backFaceCulling = false;
+	skyboxMaterial.reflectionTexture = new BABYLON.CubeTexture("textures/skybox", scene);
+	skyboxMaterial.reflectionTexture.coordinatesMode = BABYLON.Texture.SKYBOX_MODE;
+	skyboxMaterial.diffuseColor = new BABYLON.Color3(0, 0, 0);
+	skyboxMaterial.specularColor = new BABYLON.Color3(0, 0, 0);
+	skybox.material = skyboxMaterial;
+    
+    var camera = new BABYLON.ArcRotateCamera("camera1", 0,  Math.PI / 2, 10, BABYLON.Vector3.Zero(), scene);
+    //var camera = new BABYLON.FreeCamera("camera1", new BABYLON.Vector3(0, 5, -10), scene);
+    camera.setTarget(BABYLON.Vector3.Zero());
+    camera.attachControl(canvas, true);
+
+    var light = new BABYLON.HemisphericLight("light", new BABYLON.Vector3(0, 1, 0), scene);
+    light.intensity = 0.7;
+
+    const xrButton = document.querySelector(".xr-button-overlay");
+    if (xrButton)
+        xrButton.style.position = "";
+
+
+    // GLOBAL VALUES
+
+
+    // GLOBAL COMPONENTS
+    const ADVANCEDTEXTURE = BABYLON.GUI.AdvancedDynamicTexture.CreateFullscreenUI("UI", true, scene);
+
+    const XR = await scene.createDefaultXRExperienceAsync({
+        // ask for an ar-session
+        uiOptions: {
+        sessionMode: "immersive-ar",
+        },
+    });
+
+
+    const ROOT = new BABYLON.TransformNode("ParentNode", scene);
+    
+    const TOPMENU = new TopMenu(ADVANCEDTEXTURE);
+    TOPMENU.setVisible(false);
+
+
+    const MAINOBJECT = new SceneObject("https://raw.githubusercontent.com/jilan-nudle/NudleDroneARModels/main/animated_drone.glb", scene);
+    await MAINOBJECT.loadObject();
+    MAINOBJECT.setVisible(false);
+    MAINOBJECT.setParent(ROOT);
+
+    
+
+    // attaching virtual shadow
+    const SHADOW = new BlobShadow(scene, { radius: 1, opacity: 0 });
+    SHADOW.attachTo(MAINOBJECT.getRoot());
+
+    MAINOBJECT.refresh = () => {
+        MAINOBJECT.stopAllAnimation();
+        MAINOBJECT.playAnimation("hover");
+        MAINOBJECT.getObject().animationGroups.find(a => a.name === "exploded_view").reset();
+        //MAINOBJECT.getObject().animationGroups.find(a => a.name === "step_by_step").reset();
+        MAINOBJECT.getObject().animationGroups.find(a => a.name === "hover").stop();
+        MAINOBJECT.getObject().animationGroups.find(a => a.name === "hover").goToFrame(0);
+
+    }
+
+    // Setting additonal button functions
+    TOPMENU.animateButton.onPointerUpObservable.add(() => {
+        MAINOBJECT.refresh()
+        MAINOBJECT.playAnimation("hover");
+    });
+
+    TOPMENU.explodeButton.onPointerUpObservable.add(() => {
+        MAINOBJECT.playAnimation("exploded_view");
+    });
+
+    // Defining pointer in main scene
+    //const DOT = BABYLON.SphereBuilder.CreateSphere("dot",{diameter: 0.1,},scene);
+    const DOT = BABYLON.MeshBuilder.CreateTorus('marker', { diameter: 0.15, thickness: 0.05, tessellation: 32 });
+    DOT.isVisible = false;
+    scene.onPointerObservable.add((pointerInfo) => {
+    if (pointerInfo.type === BABYLON.PointerEventTypes.POINTERPICK) {
+            const { hit, pickedMesh } = pointerInfo.pickInfo;
+            if (hit && pickedMesh === DOT) {
+                MANAGER.goTo("Overview");
+            }
+        }
+    });
+
+    const FEATUREMANAGER = XR.baseExperience.featuresManager;
+    const HITTEST = FEATUREMANAGER.enableFeature(BABYLON.WebXRHitTest, "latest");
+
+
+
+    // =======
+    const MANAGER = new FlowEngine({
+        states:[new IntroScene(), new OverviewScene(), new Slide1Scene(), new Slide2Scene(), new Slide4Scene(), new Slide3Scene(), new ConcludeScene(), new ArIntroScene()],
+        initial: 'Introduction',
+        context: {advancedTexture:ADVANCEDTEXTURE, topMenu: TOPMENU, xr:XR, babylonEngine:engine,
+                    root: ROOT, scene: scene, mainObject: MAINOBJECT, dot: DOT, shadow: SHADOW,
+                    skybox: skybox, featureManager:FEATUREMANAGER, hitTest: HITTEST, isARPlaced:false,
+                    uiScale:1,
+        }
+    });
+
+
+    TOPMENU.arButton.onPointerUpObservable.add(() => {
+        if(XR.baseExperience.state === BABYLON.WebXRState.IN_XR){
+            XR.baseExperience.exitXRAsync();            
+        }else if(XR.baseExperience.state === BABYLON.WebXRState.NOT_IN_XR){
+            XR.baseExperience.enterXRAsync("immersive-ar", "local-floor");
+        }
+    });
+
+
+    
+
+    TOPMENU.nextButton.onPointerUpObservable.add(() => {
+        const current = MANAGER.current?.name;
+        const stateNames = Array.from(MANAGER.states.keys());
+        let index = stateNames.indexOf(current);
+        if(index >=0 && index < stateNames.length - 1){
+            MANAGER.goTo(stateNames[index + 1]);
+        }
+    });
+
+    TOPMENU.prevButton.onPointerUpObservable.add(() => {
+        const current = MANAGER.current?.name;
+        const stateNames = Array.from(MANAGER.states.keys());
+        let index = stateNames.indexOf(current);
+        if(index >=1 && index < stateNames.length){
+            MANAGER.goTo(stateNames[index - 1]);
+        }
+        
+    });
+
+
+    // Handling XR changes
+    XR.baseExperience.onStateChangedObservable.add((state) => {
+        if (state === BABYLON.WebXRState.IN_XR) {
+            MANAGER.goTo("ArIntroduction"); // restarting scene
+        } else if (state === BABYLON.WebXRState.NOT_IN_XR) {
+            MANAGER.goTo("Overview"); // restarting scene
+        }
+    });
+
+
+    // MAIN
+    await MANAGER.start();
+
+
+
+    return scene;
+};
+                window.initFunction = async function() {
+                    
+                    
+                    
+                    var asyncEngineCreation = async function() {
+                        try {
+                        return createDefaultEngine();
+                        } catch(e) {
+                        console.log("the available createEngine function failed. Creating the default engine instead");
+                        return createDefaultEngine();
+                        }
+                    }
+
+                    window.engine = await asyncEngineCreation();
+                    
+                    const engineOptions = window.engine.getCreationOptions?.();
+                    if (!engineOptions || engineOptions.audioEngine !== false) {
+                        
+                    }
+        if (!engine) throw 'engine should not be null.';
+        startRenderLoop(engine, canvas);
+        window.scene = createScene();};
+        initFunction().then(() => {scene.then(returnedScene => { sceneToRender = returnedScene; });
+        
+                    });
+
+                    // Resize
+                    window.addEventListener("resize", function () {
+                        engine.resize();
+                    });
+        </script>
+    </body>
+</html>
